@@ -8,7 +8,9 @@ import Control.Concurrent
 import Control.Exception
 import Data.List
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import qualified System.Metrics as Metrics
 import qualified System.Metrics.Distribution as Distribution
+import qualified System.Metrics.Dimensional as Dimensional
 import qualified System.Metrics.Counter as Counter
 import qualified System.Metrics.Label as Label
 import System.Remote.Monitoring
@@ -22,7 +24,15 @@ mean xs = sum' xs / fromIntegral (length xs)
 
 main :: IO ()
 main = do
-    handle <- forkServer "localhost" 8000
+    store <- Metrics.newStore
+    Metrics.registerGcMetrics store
+    reqCount <- Metrics.createDimensionalCounter "requests" store ["path", "status"]
+
+    root300 <- Dimensional.lookupOrCreate reqCount ["/", "300"]
+    hello200 <- Dimensional.lookupOrCreate reqCount ["/hello", "200"]
+    hello500 <- Dimensional.lookupOrCreate reqCount ["/hello", "500"]
+
+    handle <- forkServerWith store "localhost" 8000
     counter <- getCounter "iterations" handle
     label <- getLabel "args" handle
     event <- getDistribution "runtime" handle
@@ -32,6 +42,8 @@ main = do
             Distribution.add event t
             threadDelay 2000
             Counter.inc counter
+            Counter.inc root300
+            if (odd $ ceiling n) then Counter.inc hello200 else Counter.inc hello500
             loop n
     loop 1000000
 

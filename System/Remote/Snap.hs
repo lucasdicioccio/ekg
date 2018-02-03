@@ -98,6 +98,9 @@ serve store = do
     modifyResponse $ setContentType "application/json"
     if S.null (rqPathInfo req)
         then serveAll
+        -- TODO: support dimensional params lookup
+        -- currently not straightforward because the key/value pairs for
+        -- dimensions are also part of the main HashMap keys
         else serveOne (rqPathInfo req)
   where
     serveAll = do
@@ -113,7 +116,7 @@ serve store = do
                 finishWith r
             Right name -> do
                 metrics <- liftIO $ sampleAll store
-                case M.lookup name metrics of
+                case M.lookup (name, []) metrics of
                     Nothing -> pass
                     Just metric -> writeLBS $ encodeOne metric
 
